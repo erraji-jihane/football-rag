@@ -1,47 +1,47 @@
 # RAG Pipeline with LangChain & Groq
 
-An end-to-end **Retrieval-Augmented Generation (RAG)** system built with LangChain, FAISS, and Groq's Llama 3.3 70B model.
+An **end-to-end Retrieval-Augmented Generation (RAG)** system built to query PDF documents using AI.
 
 ## Features
 
 - PDF document loading and intelligent chunking
-- Vector embeddings using Hugging Face (all-MiniLM-L6-v2)
+- Vector embeddings using Hugging Face
 - FAISS vector store for fast similarity search
-- Retrieval-Augmented Generation using Groq's powerful LLM
-- Clean environment variable management
+- High-quality responses powered by Groq (Llama 3.3 70B)
+- Clean `.env` configuration
 
 ## Tech Stack
 
-- **LangChain** – Orchestration framework
+- **LangChain** – Framework
 - **FAISS** – Vector database
-- **Groq** – Fast inference with Llama 3.3 70B
+- **Groq** – Fast LLM inference
 - **Hugging Face Embeddings**
-- **Python 3.10+**
+- **Python**
 
 ## Project Structure
+
+```bash
 rag-pipeline/
-├── data/                  # PDF documents
-├── index/                 # FAISS vector index
-├── .env                   # API keys (not committed)
-├── main.py                # Main RAG pipeline
+├── data/                    # PDF documents go here
+├── index/                   # FAISS vector index (auto-generated)
+├── main.py                  # Main RAG pipeline
+├── .env                     # API keys (gitignored)
 ├── .gitignore
 └── README.md
-text## How to Run
+🚀 How to Run
 
-1. Clone the repo:
-   ```bash
-   git clone https://github.com/erraji-jihane/rag-pipeline.git
-   cd rag-pipeline
-
-Create virtual environment and install dependencies:Bashpython -m venv .venv
+Clone the repo:Bashgit clone https://github.com/erraji-jihane/rag-pipeline.git
+cd rag-pipeline
+Install dependencies:Bashpython -m venv .venv
 .venv\Scripts\activate
-pip install -r requirements.txt
-Add your Groq API key:envGROQ_API_KEY=gsk_...
-Run the pipeline:Bashpython main.py
+pip install langchain langchain-community langchain-text-splitters langchain-huggingface langchain-groq faiss-cpu python-dotenv pypdf
+Add your Groq key in .env:envGROQ_API_KEY=your_key_here
+Run:Bashpython main.py
 
-Future Improvements
+🔮 Future Improvements
 
-Web UI with Gradio/Streamlit
-Advanced chunking strategies
-Evaluation metrics for retrieval quality
+Web UI using Gradio or Streamlit
 Support for multiple documents
+Advanced chunking strategies
+Retrieval evaluation metrics
+Conversation memory
