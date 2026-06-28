@@ -1,6 +1,13 @@
 import os
+import glob
 from dotenv import load_dotenv
 from langchain_core.prompts import PromptTemplate
+
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_groq import ChatGroq
 
 # Load environment variables
 load_dotenv(override=True)
@@ -12,18 +19,15 @@ if not GROQ_API_KEY:
 
 print("GROQ API Key loaded successfully!")
 
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_groq import ChatGroq
+pdf_files = glob.glob("data/*.pdf")
+all_documents = []
+for path in pdf_files:
+    loader = PyPDFLoader(path)
+    all_documents.extend(loader.load())
 
-# config
-PDF_PATH = "data/rag_paper.pdf"
+documents = all_documents
+print(f"Loaded {len(documents)} pages from {len(pdf_files)} PDFs")
 
-# loading ans splitting doc
-loader = PyPDFLoader(PDF_PATH)
-documents = loader.load()
 
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=500,
