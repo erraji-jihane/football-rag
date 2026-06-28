@@ -35,9 +35,15 @@ print(f"Total chunks: {len(chunks)}")
 # creating vector store 
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-vectorstore = FAISS.from_documents(chunks, embeddings)
-vectorstore.save_local("index/faiss_index")
-print("FAISS index saved successfully!")
+FAISS_INDEX_PATH = "index/faiss_index"
+
+if os.path.exists(FAISS_INDEX_PATH):
+    vectorstore = FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
+    print("Loaded existing FAISS index.")
+else:
+    vectorstore = FAISS.from_documents(chunks, embeddings)
+    vectorstore.save_local(FAISS_INDEX_PATH)
+    print("FAISS index saved successfully!")
 
 # setting up LLM and query
 llm = ChatGroq(
