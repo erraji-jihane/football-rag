@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from langchain_core.prompts import PromptTemplate
 
 # Load environment variables
 load_dotenv(override=True)
@@ -53,21 +54,24 @@ llm = ChatGroq(
 )
 
 # Test query
-query = "What is retrieval augmented generation?"
-
 retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+
+query = "What is retrieval augmented generation?"
 docs = retriever.invoke(query)
 context = "\n\n".join([doc.page_content for doc in docs])
 
-prompt = f"""Use the following context to answer the question:
+prompt = PromptTemplate(
+    input_variables=["context", "question"],
+    template="""Use only the context below to answer.
+If unsure, say "I don't know based on the document."
 
-Context:
-{context}
-
-Question: {query}
-
+Context: {context}
+Question: {question}
 Answer:"""
+)
 
-result = llm.invoke(prompt)
+final_prompt = prompt.format(context=context, question=query)
+result = llm.invoke(final_prompt)
 print("\n🔹 Question:", query)
 print("🔹 Answer:", result.content)
+print("🔹 Sources:", [doc.metadata for doc in docs])
