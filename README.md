@@ -1,47 +1,53 @@
-# RAG Pipeline with LangChain & Groq
+# RAG Pipeline
 
-An **end-to-end Retrieval-Augmented Generation (RAG)** system built to query PDF documents using AI.
+A retrieval-augmented generation pipeline that answers questions using a mix of PDFs and scraped web pages. I built it around the 2026 World Cup as a test domain since it's live and changing right now, which makes it a good stress test for hallucination (the model shouldn't invent things that haven't happened yet).
 
-## Features
+## How it works
 
-- PDF document loading and intelligent chunking
-- Vector embeddings using Hugging Face
-- FAISS vector store for fast similarity search
-- High-quality responses powered by Groq (Llama 3.3 70B)
-- Clean `.env` configuration
+- `sources.py` holds the list of PDFs (local files) and URLs to pull from
+- `pipeline.py` does the actual work: loads the PDFs, scrapes the URLs with BeautifulSoup, splits everything into chunks, embeds the chunks with a HuggingFace sentence-transformer model, and stores them in a FAISS index (cached to disk, so it doesn't re-embed every run)
+- `main.py` is a simple CLI loop to ask it questions
+- `test.py` runs a fixed list of test questions automatically instead of typing them one by one
 
-## Tech Stack
+The prompt tells the model to only answer from the retrieved context and say "I don't know" if the context doesn't cover it. That's the main defense against hallucination here.
 
-- **LangChain** – Framework
-- **FAISS** – Vector database
-- **Groq** – Fast LLM inference
-- **Hugging Face Embeddings**
-- **Python**
+## Testing it
 
-## Project Structure
+I wrote 10 questions covering a few different things: basic facts, squad/roster info, live stats, general tournament facts, and one deliberate trap question ("who won the 2026 World Cup" — it hasn't happened yet in the data used, so the right answer is "I don't know").
+
+Result: 9 out of 10 were correct or correctly said "I don't know" instead of guessing. The one interesting case was the Morocco captain question — instead of making something up, it referenced Hakimi's 2022 captaincy but didn't claim it applies to 2026, which is the kind of careful hedging you actually want.
+
+The most important one is the "who won" question — it didn't invent a winner, which is really the whole point of the grounding prompt.
+
+## A chunking problem I ran into
+
+I first tried `chunk_size=500`. With the full source list (84 URLs + 7 PDFs) that produced about 18,000 chunks, and embedding that many on CPU basically never finished in a reasonable time — I had to kill it twice. Bumping to `chunk_size=1500` cut that down to roughly a third as many chunks, which made it actually usable for iterating locally.
+
+While testing, I also just used a smaller subset of sources (12 URLs instead of 84) so I could run the eval quickly without waiting 20+ minutes every time I changed something. The full source list still lives in `sources.py`, just used for the "real" run rather than every single test.
+
+## Running it
 
 ```bash
-rag-pipeline/
-├── data/                    # PDF documents go here
-├── index/                   # FAISS vector index (auto-generated)
-├── main.py                  # Main RAG pipeline
-├── .env                     # API keys (gitignored)
-├── .gitignore
-└── README.md
-🚀 How to Run
+pip install -r requirements.txt
+```
 
-Clone the repo:Bashgit clone https://github.com/erraji-jihane/rag-pipeline.git
-cd rag-pipeline
-Install dependencies:Bashpython -m venv .venv
-.venv\Scripts\activate
-pip install langchain langchain-community langchain-text-splitters langchain-huggingface langchain-groq faiss-cpu python-dotenv pypdf
-Add your Groq key in .env:envGROQ_API_KEY=your_key_here
-Run:Bashpython main.py
+Add a `.env` file:
+```
+GROQ_API_KEY=your_key_here
+```
 
-🔮 Future Improvements
+Then:
+```bash
+python main.py     # ask questions interactively
+python test.py     # run the fixed test set
+```
 
-Web UI using Gradio or Streamlit
-Support for multiple documents
-Advanced chunking strategies
-Retrieval evaluation metrics
-Conversation memory
+## Stack
+
+LangChain, HuggingFace embeddings, FAISS, Groq (Llama 3.3 70B), BeautifulSoup, PyPDF
+
+## What's not done yet
+
+- Retrieval is pure vector search right now — no keyword/hybrid search, so it can miss exact-match queries a plain keyword search would catch
+- The scraped sources are mostly Wikipedia plus a handful of news sites. A live stats API (football-data.org, for example) would be more reliable than scraping for anything time-sensitive
+- If a source changes, the FAISS index doesn't auto-invalidate — you have to delete `index/faiss_index` manually and rebuild
