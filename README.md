@@ -15,9 +15,13 @@ The prompt tells the model to only answer from the retrieved context and say "I 
 
 I wrote 10 questions covering a few different things: basic facts, squad/roster info, live stats, general tournament facts, and one deliberate trap question ("who won the 2026 World Cup" — it hasn't happened yet in the data used, so the right answer is "I don't know").
 
-Result: 9 out of 10 were correct or correctly said "I don't know" instead of guessing. The one interesting case was the Morocco captain question — instead of making something up, it referenced Hakimi's 2022 captaincy but didn't claim it applies to 2026, which is the kind of careful hedging you actually want.
+**Result: 8/10 clearly correct, 1 with an incorrect supporting fact, 1 correctly declined to answer.**
 
-The most important one is the "who won" question — it didn't invent a winner, which is really the whole point of the grounding prompt.
+The most important one is the "who won" question — it didn't invent a winner, which is the whole point of the grounding prompt. It also correctly said "I don't know" on Cape Verde's squad list and Messi's exact goal count, where the sources genuinely didn't have that data.
+
+The one real miss: asked who Morocco's captain is, it answered that Achraf Hakimi was Morocco's captain at the 2022 World Cup. That's wrong — Romain Saïss was the actual captain in 2022; Hakimi was vice-captain and only wore the armband when Saïss was out. The model did correctly avoid asserting an unconfirmed 2026 captaincy claim, but the 2022 fact it stated confidently was incorrect. I checked this manually against outside sources rather than assuming the green output was right.
+
+This is a useful result on its own: the grounding prompt stops the model from inventing things that aren't in the sources at all, but it doesn't guarantee every fact restated from a source is accurate — especially when the source article itself is ambiguous about the difference between "wore the armband" and "was the captain."
 
 ## A chunking problem I ran into
 
@@ -49,5 +53,6 @@ LangChain, HuggingFace embeddings, FAISS, Groq (Llama 3.3 70B), BeautifulSoup, P
 ## What's not done yet
 
 - Retrieval is pure vector search right now — no keyword/hybrid search, so it can miss exact-match queries a plain keyword search would catch
+- No fact-verification step — the model can restate an inaccurate claim from a source confidently if the source itself is ambiguous (see the captain example above)
 - The scraped sources are mostly Wikipedia plus a handful of news sites. A live stats API (football-data.org, for example) would be more reliable than scraping for anything time-sensitive
 - If a source changes, the FAISS index doesn't auto-invalidate — you have to delete `index/faiss_index` manually and rebuild
