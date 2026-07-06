@@ -24,7 +24,8 @@ def scrap_urls(url):
     try:
         response = requests.get(url, headers=header, timeout=10) #gets raw html
         response.raise_for_status()
-    except requests.RequestException:
+    except requests.RequestException as e:
+        logger.warning(f"Scrape failed for {url}: {e}")
         return ""
     
     soup = BeautifulSoup(response.text,"html.parser") #parses the html into a searchable structure
@@ -36,27 +37,26 @@ def scrap_urls(url):
         text = soup.get_text()
     return text
 
-def build_pipeline ():
-
-    load_dotenv()
-
-    # Get API key
-    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-    if not GROQ_API_KEY:
-        raise ValueError("GROQ_API_KEY not found in .env file. Please add it.")
-
-    logger.info("GROQ API Key loaded successfully!")
+def load_pdfs():
 
     all_documents = []
 
     #Loading the pdfs
     pdf_files = glob.glob("data/*.pdf")
-    logger.info(f"Loaded {len(pdf_files)} PDF(s)")
+    logger.info(f"Found {len(pdf_files)} PDF(s)")
 
     for path in pdf_files:
-        loader = PyPDFLoader(path)
-        all_documents.extend(loader.load())
+        try:
+            loader = PyPDFLoader(path)
+            all_documents.extend(loader.load())
+        except Exception as e:
+            logger.info(f"Failed to load PDF '{path}' as {e}")
 
+    
+
+    return all_documents
+
+def load_links(all_documents):
     #Loading the links 
     wikipedia_urls = [f"https://en.wikipedia.org/wiki/{topic}" for topic in WIKIPEDIA_TOPICS ]
 
@@ -68,20 +68,19 @@ def build_pipeline ():
         page_doc = Document(page_content=page_text, metadata={"source": url}) #Wraps scraped text + its URL into one Document object, same asteh pdf page.
         all_documents.append(page_doc)
 
-
-    #chunking
+def chunk_documents(all_documents):
+    
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1500,
         chunk_overlap=50
     )
     chunks = text_splitter.split_documents(all_documents)
-    logger.info(f"Created {len(chunks)} chunks")
+    return chunks
 
-
-    # creating vector store 
+def build_vectorstore(chunks):
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-    FAISS_INDEX_PATH = "index/faiss_icndex"
+    FAISS_INDEX_PATH = "index/faiss_index"
 
     if os.path.exists(FAISS_INDEX_PATH):
         vectorstore = FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
@@ -90,6 +89,10 @@ def build_pipeline ():
         vectorstore = FAISS.from_documents(chunks, embeddings)
         vectorstore.save_local(FAISS_INDEX_PATH)
         logger.info("Built and saved new FAISS index")
+    
+    return vectorstore
+
+def build_llm(GROQ_API_KEY):
 
     # setting up LLM and query
     llm = ChatGroq(
@@ -107,6 +110,30 @@ def build_pipeline ():
     Question: {question}
     Answer:"""
     )
+    return llm ,prompt
+
+
+def build_pipeline ():
+
+    all_documents = []
+
+    load_dotenv()
+
+    # Get API key
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+    if not GROQ_API_KEY:
+        raise ValueError("GROQ_API_KEY not found in .env file. Please add it.")
+
+    logger.info("GROQ API Key loaded successfully!")
+
+    all_documents = load_pdfs()
+    load_links (all_documents)
+
+    chunks = chunk_documents(all_documents)
+    logger.info(f"Created {len(chunks)} chunks")
+
+    vectorstore = build_vectorstore(chunks)
+    llm, prompt = build_llm(GROQ_API_KEY)
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
     return retriever, llm, prompt
