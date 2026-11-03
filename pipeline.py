@@ -43,7 +43,7 @@ def scrap_urls(url):
     }
     if "wikipedia.org" in url:
         # Wikipedia's robot policy asks for a descriptive User-Agent instead of a browser one
-        header["User-Agent"] = "rag-pipeline/1.0 (https://github.com/erraji-jihane/rag-pipeline)"
+        header["User-Agent"] = "football-rag/1.0 (https://github.com/erraji-jihane/football-rag)"
     # Wikipedia answers 429 or 403 when requests come too fast, so back off and retry
     for attempt in range(4):
         try:
