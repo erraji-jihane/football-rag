@@ -2,3 +2,5 @@
 .env
 index/
 __pycache__/
+data/*.pdf
+eval/answer_results.md
