@@ -33,7 +33,18 @@ The mode can be switched with the `RETRIEVAL_MODE` environment variable (`vector
 
 `evaluate.py` runs every mode on 19 questions labelled with the source that should answer them (`eval/questions.json`: the 9 answerable original questions plus 10 retrieval-only ones) and reports Hit@1, Hit@3 and MRR@10.
 
-Results: run `python evaluate.py` (writes `eval/retrieval_results.md`).
+Results from 3 November 2026 (912 chunks from the web sources only, no PDFs; CPU):
+
+| Mode | Hit@1 | Hit@3 | MRR@10 | ms / query |
+|---|---|---|---|---|
+| vector | 0.95 | 1.00 | 0.974 | 13 |
+| bm25 | 0.74 | 0.95 | 0.826 | 2 |
+| hybrid | **1.00** | **1.00** | **1.000** | 15 |
+| hybrid_rerank | 0.89 | 0.95 | 0.932 | 1616 |
+
+Fusing BM25 with vector search fixed the one question vector search ranked second (Hit@1 0.95 → 1.00) at almost no extra cost. The cross-encoder made things worse: it pushed the right chunk out of the top 3 for "who is Morocco's captain" and demoted another to second place, while making each query about 100× slower. A reranker trained on MS MARCO web search doesn't seem to suit these long Wikipedia chunks, so plain `hybrid` is the better choice on this data.
+
+Caveats: 19 questions is a small set, so one question moves Hit@k by 0.05. The Wikipedia pages are scraped live, so the numbers can shift as the pages change. Run `python evaluate.py` to reproduce (writes `eval/retrieval_results.md`).
 
 ## Testing the answers
 
