@@ -19,7 +19,7 @@
      "expected_sources": ["2026_FIFA_World_Cup"], "answer_check": {"type": "all", "keywords": ["Canada", "Mexico", "United States"]}},
     {"id": "curacao_historic", "question": "why is curaçao's qualification historic",
      "expected_sources": ["Cura"], "answer_check": {"type": "any", "keywords": ["smallest", "first"]}},
-    {"id": "trap_winner", "question": "who won the 2026 world cup",
+    {"id": "trap_winner", "question": "who won the 2030 world cup",
      "expected_sources": [], "answer_check": {"type": "decline"}},
 
     {"id": "r_ballon_dor_most", "question": "which player has won the most Ballon d'Or awards",

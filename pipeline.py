@@ -30,9 +30,11 @@ MANIFEST_PATH = os.path.join(INDEX_DIR, "manifest.json")
 CHUNK_SIZE = 1500
 CHUNK_OVERLAP = 50
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+# Groq retires models regularly (llama-3.3-70b-versatile is gone), so it can be overridden
+LLM_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
 # Retrieval mode used by main.py and test.py: vector | bm25 | hybrid | hybrid_rerank
-DEFAULT_MODE = os.getenv("RETRIEVAL_MODE", "hybrid_rerank")
+DEFAULT_MODE = os.getenv("RETRIEVAL_MODE", "hybrid")
 
 
 def scrap_urls(url):
@@ -180,7 +182,7 @@ def build_llm(GROQ_API_KEY):
 
     # setting up LLM and query
     llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
+        model=LLM_MODEL,
         temperature=0,
         groq_api_key=GROQ_API_KEY
     )

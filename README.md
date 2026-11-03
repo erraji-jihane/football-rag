@@ -19,7 +19,7 @@ The first version used vector search only. That works for questions phrased in m
 
 ```text
 question ──┬──▶ BM25 keyword search   (top 20) ──┐
-           │                                     ├──▶ Reciprocal Rank Fusion ──▶ cross-encoder rerank ──▶ top 3 ──▶ Llama 3.3 70B
+           │                                     ├──▶ Reciprocal Rank Fusion ──▶ (optional cross-encoder rerank) ──▶ top 3 ──▶ LLM (Groq)
            └──▶ FAISS vector search   (top 20) ──┘
 ```
 
@@ -27,7 +27,7 @@ question ──┬──▶ BM25 keyword search   (top 20) ──┐
 - **Reciprocal Rank Fusion** merges the two ranked lists with `score = Σ 1 / (60 + rank)`. It only uses ranks, so the two retrievers' very different score scales never need to be calibrated.
 - **Cross-encoder reranking** (`cross-encoder/ms-marco-MiniLM-L-6-v2`) reads the question and each candidate chunk together, which is more accurate than comparing two separate embeddings, but too slow to run over every chunk. So it only reorders the 20 fused candidates.
 
-The mode can be switched with the `RETRIEVAL_MODE` environment variable (`vector`, `bm25`, `hybrid`, `hybrid_rerank`) to compare them.
+The mode can be switched with the `RETRIEVAL_MODE` environment variable (`vector`, `bm25`, `hybrid`, `hybrid_rerank`). The default is `hybrid`, without the reranker, because it scored best in the evaluation below.
 
 ## Retrieval evaluation
 
@@ -48,15 +48,23 @@ Caveats: 19 questions is a small set, so one question moves Hit@k by 0.05. The W
 
 ## Testing the answers
 
-I wrote 10 questions covering a few different things: basic facts, squad/roster info, live stats, general tournament facts, and one deliberate trap question ("who won the 2026 World Cup" — it hasn't happened yet in the data used, so the right answer is "I don't know").
+I wrote 10 questions covering a few different things: basic facts, squad/roster info, live stats, general tournament facts, and one deliberate trap question about a World Cup that hasn't been played, so the right answer is "I don't know". `test.py` scores them: keyword checks give PASS/FAIL, and questions whose answer changed during the tournament are marked MANUAL.
 
-**Result: 8/10 clearly correct, 1 with an incorrect supporting fact, 1 correctly declined to answer.**
+### Latest run (3 November 2026, `openai/gpt-oss-120b`, `hybrid` retrieval)
 
-The most important one is the "who won" question — it didn't invent a winner, which is the whole point of the grounding prompt. It also correctly said "I don't know" on Cape Verde's squad list and Messi's exact goal count, where the sources genuinely didn't have that data.
+Groq retired Llama 3.3 70B, so the pipeline now uses `openai/gpt-oss-120b` (set `GROQ_MODEL` to change it).
 
-The one real miss: asked who Morocco's captain is, it answered that Achraf Hakimi was Morocco's captain at the 2022 World Cup. That's wrong — Romain Saïss was the actual captain in 2022; Hakimi was vice-captain and only wore the armband when Saïss was out. The model did correctly avoid asserting an unconfirmed 2026 captaincy claim, but the 2022 fact it stated confidently was incorrect. I checked this manually against outside sources rather than assuming the green output was right.
+**Automatic checks: 5/6 passed, 4 checked by hand.**
 
-This is a useful result on its own: the grounding prompt stops the model from inventing things that aren't in the sources at all, but it doesn't guarantee every fact restated from a source is accurate — especially when the source article itself is ambiguous about the difference between "wore the armband" and "was the captain."
+- **Trap question:** the original trap was "who won the 2026 World Cup", but the tournament has now finished and the scraped Wikipedia page says Spain won, so "Spain" became the correct, grounded answer. I replaced it with "who won the 2030 World Cup", and the model correctly declined.
+- **Real miss:** asked which club Mbappé plays for, it answered PSG. His Wikipedia page says he joined Real Madrid in 2024, but the three retrieved chunks all came from the PSG section of his career. The grounding prompt can't fix stale context, so this is a retrieval problem: long biographies contain several "current club" contexts from different years.
+- **Manual answers:** "I don't know" for Morocco's 2026 captain, Cape Verde's squad and Messi's 2026 goals, and "Mbappé" for the Golden Boot, which matches the scraped tracker.
+
+### First run (Llama 3.3 70B, vector retrieval, before the tournament)
+
+**8/10 clearly correct, 1 with an incorrect supporting fact, 1 correctly declined to answer.** The model didn't invent a 2026 winner, and it said "I don't know" where the sources lacked the data. The one miss: asked who Morocco's captain is, it said Achraf Hakimi captained Morocco at the 2022 World Cup. Romain Saïss was the captain; Hakimi only wore the armband when Saïss was out. I checked this against outside sources rather than trusting the output.
+
+Together the two runs show the limits of grounding: the prompt stops the model from inventing facts that aren't in the sources, but it can't stop it from confidently restating a source that is ambiguous or out of date.
 
 ## A chunking problem I ran into
 
@@ -74,6 +82,7 @@ Add a `.env` file:
 ```
 GROQ_API_KEY=your_key_here
 ```
+(see `.env.example` for the optional `RETRIEVAL_MODE` and `GROQ_MODEL`)
 
 Then:
 ```bash
@@ -87,7 +96,7 @@ The first run downloads the embedding and reranking models and builds the index;
 
 ## Stack
 
-LangChain, HuggingFace embeddings, FAISS, BM25 (from scratch), cross-encoder reranking (sentence-transformers), Groq (Llama 3.3 70B), BeautifulSoup, PyPDF
+LangChain, HuggingFace embeddings, FAISS, BM25 (from scratch), cross-encoder reranking (sentence-transformers), Groq (openai/gpt-oss-120b), BeautifulSoup, PyPDF
 
 ## What's not done yet
 
