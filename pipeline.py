@@ -3,6 +3,7 @@ import os
 import glob
 import json
 import hashlib
+import time
 import requests
 import logging
 from dotenv import load_dotenv
@@ -38,12 +39,21 @@ def scrap_urls(url):
     header = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    try:
-        response = requests.get(url, headers=header, timeout=10) #gets raw html
-        response.raise_for_status()
-    except requests.RequestException as e:
-        logger.warning(f"Scrape failed for {url}: {e}")
-        return ""
+    if "wikipedia.org" in url:
+        # Wikipedia's robot policy asks for a descriptive User-Agent instead of a browser one
+        header["User-Agent"] = "rag-pipeline/1.0 (https://github.com/erraji-jihane/rag-pipeline)"
+    # Wikipedia answers 429 or 403 when requests come too fast, so back off and retry
+    for attempt in range(4):
+        try:
+            response = requests.get(url, headers=header, timeout=10) #gets raw html
+            if response.status_code in (403, 429) and attempt < 3:
+                time.sleep(2 ** (attempt + 1))
+                continue
+            response.raise_for_status()
+            break
+        except requests.RequestException as e:
+            logger.warning(f"Scrape failed for {url}: {e}")
+            return ""
 
     soup = BeautifulSoup(response.text,"html.parser") #parses the html into a searchable structure
     content_div = soup.find("div", {"id": "mw-content-text"})
@@ -78,16 +88,19 @@ def load_pdfs():
     return all_documents
 
 def load_links(all_documents):
-    #Loading the links
+    """Scrapes every URL into all_documents and returns the URLs that failed."""
     urls = list_urls()
     logger.info(f"Preparing to scrape {len(urls)} URLs")
 
+    failed = []
     for url in urls :
         page_text = scrap_urls(url)
         if not page_text.strip():
+            failed.append(url)
             continue
         page_doc = Document(page_content=page_text, metadata={"source": url}) #Wraps scraped text + its URL into one Document object, same as the pdf page.
         all_documents.append(page_doc)
+    return failed
 
 def chunk_documents(all_documents):
 
@@ -120,26 +133,32 @@ def load_or_build_index():
     only if the sources are unchanged, so editing sources.py or adding a PDF
     triggers a rebuild automatically (no more deleting index/ by hand). BM25 needs
     the chunk texts, which is why they are cached alongside the vectors.
+    An index built while some URLs failed to scrape is rebuilt on the next run.
     """
     embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
     fingerprint = sources_fingerprint()
 
-    cached = None
+    cached, cached_failed = None, []
     if os.path.exists(MANIFEST_PATH):
         with open(MANIFEST_PATH, encoding="utf-8") as f:
-            cached = json.load(f).get("fingerprint")
+            manifest = json.load(f)
+        cached, cached_failed = manifest.get("fingerprint"), manifest.get("failed_urls", [])
 
-    if cached == fingerprint and os.path.exists(FAISS_INDEX_PATH) and os.path.exists(CHUNKS_PATH):
+    if cached == fingerprint and not cached_failed and os.path.exists(FAISS_INDEX_PATH) and os.path.exists(CHUNKS_PATH):
         vectorstore = FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
         chunks = load_chunks()
         logger.info(f"Loaded cached index ({len(chunks)} chunks)")
         return vectorstore, chunks
 
-    if cached is not None:
+    if cached_failed:
+        logger.info(f"Last build missed {len(cached_failed)} URL(s), rebuilding the index")
+    elif cached is not None:
         logger.info("Sources changed since the last build, rebuilding the index")
 
     all_documents = load_pdfs()
-    load_links(all_documents)
+    failed = load_links(all_documents)
+    if failed:
+        logger.warning(f"{len(failed)} URL(s) could not be scraped, the index will be rebuilt next run: {failed}")
     chunks = chunk_documents(all_documents)
     logger.info(f"Created {len(chunks)} chunks")
 
@@ -148,7 +167,7 @@ def load_or_build_index():
     vectorstore.save_local(FAISS_INDEX_PATH)
     save_chunks(chunks)
     with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
-        json.dump({"fingerprint": fingerprint, "chunks": len(chunks)}, f)
+        json.dump({"fingerprint": fingerprint, "chunks": len(chunks), "failed_urls": failed}, f)
     logger.info("Built and saved new index")
     return vectorstore, chunks
 
