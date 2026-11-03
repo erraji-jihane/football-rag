@@ -7,10 +7,12 @@ logger = logging.getLogger(__name__)
 retriever, llm, prompt = build_pipeline()
 
 while True:
-    query = input("Ask a question (exit to quit)")
+    query = input("Ask a question (exit to quit): ").strip()
 
-    if query == 'exit':
+    if query.lower() == 'exit':
         break
+    if not query:
+        continue
 
     #search relevant things
     docs = retriever.invoke(query)
@@ -21,10 +23,9 @@ while True:
     try:
         answer = llm.invoke(final_prompt)
         answer_text = answer.content
-    except:
+    except Exception as e:
         logger.error(f"LLM call failed for query '{query}': {e}")
         answer_text = "Sorry, I couldn't reach the model right now. Please try again."
 
-
-    print("Answer:", answer.content)
-    print("Sources:", [doc.metadata for doc in docs])
+    print("Answer:", answer_text)
+    print("Sources:", [doc.metadata.get("source") for doc in docs])
